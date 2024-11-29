@@ -1,91 +1,21 @@
 class VirtualCoreTerminal {
     constructor() {
-        try {
-            // Initialize terminal
-            this.term = new Terminal({
-                cursorBlink: true,
-                theme: {
-                    background: '#000000',
-                    foreground: '#39ff14',
-                    cursor: '#39ff14'
-                },
-                fontFamily: 'Courier New, monospace',
-                fontSize: 14,
-                rendererType: 'canvas',
-                convertEol: true
-            });
+        this.term = null;
+        this.fitAddon = null;
+        this.currentLine = '';
+        this.currentPosition = 0;
+        this.prompt = '\x1b[32m>>\x1b[0m ';
+        this.currentState = 'ready';
+        this.walletConnected = false;
+        this.hasNFT = false;
+        this.wallet = null;
+        
+        this.config = {
+            NETWORK: 'devnet',
+            REQUIRED_TOKEN_BALANCE: 100
+        };
 
-            // Initialize state
-            this.currentLine = '';
-            this.commandHistory = [];
-            this.historyIndex = -1;
-            this.prompt = '\x1b[32m>\x1b[0m ';
-            this.currentState = 'intro';
-            this.walletConnected = false;
-            this.hasNFT = false;
-            
-            // Configuration
-            this.config = {
-                CORE_TOKEN_ADDRESS: 'YOUR_TOKEN_ADDRESS_HERE',
-                CORE_NFT_COLLECTION: 'YOUR_COLLECTION_ADDRESS_HERE',
-                REQUIRED_TOKEN_BALANCE: 1,
-                NETWORK: 'testnet',
-                RPC_ENDPOINT: 'https://api.testnet.solana.com',
-                COMMITMENT: 'confirmed'
-            };
-
-            // Initialize supported wallets
-            this.supportedWallets = {
-                'phantom': window?.solana,
-                'solflare': window?.solflare,
-                'slope': window?.slope,
-                'sollet': window?.sollet
-            };
-
-            // Open terminal in container
-            const container = document.getElementById('terminal-container');
-            if (!container) throw new Error('Terminal container not found');
-            
-            this.term.open(container);
-
-            // Initialize addons
-            if (typeof window.FitAddon === 'undefined') {
-                throw new Error('FitAddon not loaded');
-            }
-            this.fitAddon = new window.FitAddon.FitAddon();
-            this.term.loadAddon(this.fitAddon);
-            
-            if (typeof window.WebLinksAddon === 'undefined') {
-                throw new Error('WebLinksAddon not loaded');
-            }
-            this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
-
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                if (this.fitAddon) {
-                    this.fitAddon.fit();
-                }
-            });
-            
-            // Initial fit
-            this.fitAddon.fit();
-
-            // Setup input handling
-            this.setupInputHandling();
-            
-            // Initialize
-            this.initialize();
-
-        } catch (error) {
-            console.error('Terminal initialization error:', error);
-            const container = document.getElementById('terminal-container');
-            if (container) {
-                container.innerHTML = `<div style="color: #39ff14; padding: 20px; font-family: monospace;">
-                    Error initializing terminal: ${error.message}<br>
-                    Please check console for details.
-                </div>`;
-            }
-        }
+        this.initialize();
     }
 
     async initialize() {
@@ -96,6 +26,53 @@ class VirtualCoreTerminal {
             console.error('Initialization error:', error);
             this.term.writeln('\x1b[31mError initializing terminal: ' + error.message + '\x1b[0m');
         }
+    }
+
+    async setupTerminal() {
+        // Initialize terminal
+        this.term = new Terminal({
+            cursorBlink: true,
+            theme: {
+                background: '#000000',
+                foreground: '#39ff14',
+                cursor: '#39ff14'
+            },
+            fontFamily: 'Courier New, monospace',
+            fontSize: 14,
+            rendererType: 'canvas',
+            convertEol: true
+        });
+
+        // Open terminal in container
+        const container = document.getElementById('terminal-container');
+        if (!container) throw new Error('Terminal container not found');
+        
+        this.term.open(container);
+
+        // Initialize addons
+        if (typeof window.FitAddon === 'undefined') {
+            throw new Error('FitAddon not loaded');
+        }
+        this.fitAddon = new window.FitAddon.FitAddon();
+        this.term.loadAddon(this.fitAddon);
+        
+        if (typeof window.WebLinksAddon === 'undefined') {
+            throw new Error('WebLinksAddon not loaded');
+        }
+        this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (this.fitAddon) {
+                this.fitAddon.fit();
+            }
+        });
+        
+        // Initial fit
+        this.fitAddon.fit();
+
+        // Setup input handling
+        this.setupInputHandling();
     }
 
     async showIntroSequence() {
@@ -183,72 +160,31 @@ class VirtualCoreTerminal {
         this.term.write(this.prompt);
     }
 
-    async setupTerminal() {
-        // Initialize terminal
-        this.term = new Terminal({
-            cursorBlink: true,
-            theme: {
-                background: '#000000',
-                foreground: '#39ff14',
-                cursor: '#39ff14'
-            },
-            fontFamily: 'Courier New, monospace',
-            fontSize: 14,
-            rendererType: 'canvas',
-            convertEol: true
-        });
-
-        // Open terminal in container
-        const container = document.getElementById('terminal-container');
-        if (!container) throw new Error('Terminal container not found');
-        
-        this.term.open(container);
-
-        // Initialize addons
-        if (typeof window.FitAddon === 'undefined') {
-            throw new Error('FitAddon not loaded');
-        }
-        this.fitAddon = new window.FitAddon.FitAddon();
-        this.term.loadAddon(this.fitAddon);
-        
-        if (typeof window.WebLinksAddon === 'undefined') {
-            throw new Error('WebLinksAddon not loaded');
-        }
-        this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if (this.fitAddon) {
-                this.fitAddon.fit();
-            }
-        });
-        
-        // Initial fit
-        this.fitAddon.fit();
-    }
-
     handleInput(data) {
-        switch (data) {
-            case '\r': // Enter
-                this.term.write('\r\n');
-                this.processCommand(this.currentLine.trim());
-                this.currentLine = '';
-                break;
-                
-            case '\u007F': // Backspace
-                if (this.currentLine.length > 0) {
-                    this.currentLine = this.currentLine.slice(0, -1);
-                    this.term.write('\b \b');
-                }
-                break;
-                
-            default:
-                // Only handle printable characters
-                if (data >= String.fromCharCode(32) && data <= String.fromCharCode(126)) {
-                    this.currentLine += data;
-                    this.term.write(data);
-                }
-                break;
+        // Handle backspace
+        if (data === '\u007F') {
+            if (this.currentPosition > 0) {
+                this.currentLine = this.currentLine.slice(0, -1);
+                this.currentPosition--;
+                this.term.write('\b \b');
+            }
+            return;
+        }
+
+        // Handle enter
+        if (data === '\r') {
+            this.term.writeln('');
+            this.processCommand(this.currentLine);
+            this.currentLine = '';
+            this.currentPosition = 0;
+            return;
+        }
+
+        // Handle printable characters
+        if (data >= String.fromCharCode(0x20) && data <= String.fromCharCode(0x7E)) {
+            this.currentLine += data;
+            this.currentPosition++;
+            this.term.write(data);
         }
     }
 
@@ -391,79 +327,6 @@ class VirtualCoreTerminal {
         }
     }
 
-    async detectWallet() {
-        for (const [name, wallet] of Object.entries(this.supportedWallets)) {
-            if (wallet) {
-                return { name, provider: wallet };
-            }
-        }
-        return null;
-    }
-
-    async checkCoreTokenBalance() {
-        try {
-            if (!this.wallet || !this.connection) {
-                return 0;
-            }
-
-            const tokenAccount = await this.connection.getParsedTokenAccountsByOwner(
-                this.wallet.publicKey,
-                { mint: new solanaWeb3.PublicKey(this.config.CORE_TOKEN_ADDRESS) }
-            );
-
-            if (tokenAccount.value.length === 0) {
-                return 0;
-            }
-
-            return tokenAccount.value[0].account.data.parsed.info.tokenAmount.uiAmount;
-        } catch (error) {
-            console.error('Error checking token balance:', error);
-            return 0;
-        }
-    }
-
-    async checkNFTOwnership() {
-        try {
-            if (!this.wallet || !this.connection) {
-                return false;
-            }
-
-            const metaplex = new Metaplex(this.connection);
-            const nfts = await metaplex
-                .nfts()
-                .findAllByOwner({ owner: this.wallet.publicKey });
-
-            return nfts.some(nft => 
-                nft.collection?.address.toString() === this.config.CORE_NFT_COLLECTION
-            );
-        } catch (error) {
-            console.error('Error checking NFT ownership:', error);
-            return false;
-        }
-    }
-
-    async mintNFT() {
-        if (!this.wallet || !this.connection) {
-            throw new Error('Wallet or connection not initialized');
-        }
-
-        try {
-            const metaplex = new Metaplex(this.connection);
-            const { nft } = await metaplex
-                .nfts()
-                .create({
-                    uri: 'YOUR_METADATA_URI',
-                    name: 'Virtual Core Access',
-                    sellerFeeBasisPoints: 0,
-                    collection: new solanaWeb3.PublicKey(this.config.CORE_NFT_COLLECTION)
-                });
-
-            return nft;
-        } catch (error) {
-            throw new Error(`Failed to mint NFT: ${error.message}`);
-        }
-    }
-
     async exit() {
         this.currentState = 'exit';
         await this.typeText('\x1b[32m>> Disconnecting from the Virtual Core...\x1b[0m');
@@ -471,6 +334,27 @@ class VirtualCoreTerminal {
         await this.typeText('\x1b[32m>> Remember, Seeker: The Core is always watching, waiting for your return.\x1b[0m\n');
         await this.typeText('\x1b[32m>> Session terminated.\x1b[0m');
         window.removeEventListener('resize', this.fitAddon.fit);
+    }
+
+    // Placeholder methods for blockchain interactions
+    async detectWallet() {
+        // Detect available wallets (Phantom, Solflare, etc.)
+        return { provider: window.solana, name: 'Phantom' };
+    }
+
+    async checkCoreTokenBalance() {
+        // Check Core token balance
+        return 0;
+    }
+
+    async checkNFTOwnership() {
+        // Check if user owns Core NFT
+        return false;
+    }
+
+    async mintNFT() {
+        // Mint Core NFT
+        return true;
     }
 }
 
