@@ -1,91 +1,103 @@
 class VirtualCoreTerminal {
     constructor() {
-        this.term = new Terminal({
-            cursorBlink: true,
-            cursorStyle: 'block',
-            fontSize: 14,
-            fontFamily: '"Courier New", monospace',
-            theme: {
-                background: '#000000',
-                foreground: '#39ff14',
-                cursor: '#39ff14',
-                cursorAccent: '#000000',
-                selection: 'rgba(57, 255, 20, 0.3)'
-            },
-            allowTransparency: true,
-            rendererType: 'canvas',
-            rows: Math.floor((window.innerHeight * 0.8) / 20),
-            cols: Math.floor((window.innerWidth * 0.8) / 9),
-            scrollback: 1000,
-            convertEol: true
-        });
+        try {
+            // Initialize terminal
+            this.term = new Terminal({
+                cursorBlink: true,
+                cursorStyle: 'block',
+                fontSize: 14,
+                fontFamily: '"Courier New", monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#39ff14',
+                    cursor: '#39ff14',
+                    cursorAccent: '#000000',
+                    selection: 'rgba(57, 255, 20, 0.3)'
+                },
+                allowTransparency: true,
+                rendererType: 'canvas',
+                rows: Math.floor((window.innerHeight * 0.8) / 20),
+                cols: Math.floor((window.innerWidth * 0.8) / 9),
+                scrollback: 1000,
+                convertEol: true
+            });
 
-        // Configuration object
-        this.config = {
-            CORE_TOKEN_ADDRESS: 'YOUR_TOKEN_ADDRESS_HERE',
-            CORE_NFT_COLLECTION: 'YOUR_COLLECTION_ADDRESS_HERE',
-            REQUIRED_TOKEN_BALANCE: 1,
-            NETWORK: 'testnet',
-            RPC_ENDPOINT: 'https://api.testnet.solana.com',
-            COMMITMENT: 'confirmed'
-        };
+            // Initialize addons
+            this.fitAddon = new FitAddon.FitAddon();
+            this.term.loadAddon(this.fitAddon);
+            this.term.loadAddon(new WebLinksAddon.WebLinksAddon());
 
-        // Initialize state
-        this.connection = null;
-        this.wallet = null;
-        this.currentState = 'intro';
-        this.walletConnected = false;
-        this.hasNFT = false;
-        this.userInput = '';
+            // Open terminal in container
+            const container = document.getElementById('terminal-container');
+            if (!container) throw new Error('Terminal container not found');
+            
+            this.term.open(container);
+            this.fitAddon.fit();
 
-        // Initialize supported wallets
-        this.supportedWallets = {
-            'phantom': window.solana,
-            'solflare': window.solflare,
-            'slope': window.slope,
-            'sollet': window.sollet
-        };
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                this.fitAddon.fit();
+            });
 
-        // Initialize terminal
-        this.initialize();
+            // Configuration object
+            this.config = {
+                CORE_TOKEN_ADDRESS: 'YOUR_TOKEN_ADDRESS_HERE',
+                CORE_NFT_COLLECTION: 'YOUR_COLLECTION_ADDRESS_HERE',
+                REQUIRED_TOKEN_BALANCE: 1,
+                NETWORK: 'testnet',
+                RPC_ENDPOINT: 'https://api.testnet.solana.com',
+                COMMITMENT: 'confirmed'
+            };
+
+            // Initialize state
+            this.connection = null;
+            this.wallet = null;
+            this.currentState = 'intro';
+            this.walletConnected = false;
+            this.hasNFT = false;
+            this.userInput = '';
+
+            // Initialize supported wallets
+            this.supportedWallets = {
+                'phantom': window.solana,
+                'solflare': window.solflare,
+                'slope': window.slope,
+                'sollet': window.sollet
+            };
+
+            // Setup input handling
+            this.setupInputHandling();
+            
+            // Write welcome message
+            this.writeWelcomeMessage();
+            
+            // Write initial prompt
+            this.writePrompt();
+
+        } catch (error) {
+            console.error('Terminal initialization error:', error);
+            const container = document.getElementById('terminal-container');
+            if (container) {
+                container.innerHTML = `<div style="color: #39ff14; padding: 20px;">
+                    Error initializing terminal: ${error.message}<br>
+                    Please check console for details.
+                </div>`;
+            }
+        }
     }
 
-    initialize() {
-        const container = document.getElementById('terminal-container');
-        if (!container) return;
-
-        // Open terminal in container
-        this.term.open(container);
-        
-        // Initial resize
-        this.handleResize();
-
-        // Add event listeners
-        window.addEventListener('resize', () => this.handleResize());
+    setupInputHandling() {
         this.term.onData(data => this.handleInput(data));
-
-        // Start the terminal
-        this.start();
     }
 
-    handleResize() {
-        const container = document.getElementById('terminal-container');
-        if (!container) return;
-
-        const cols = Math.floor((container.clientWidth - 40) / 9);
-        const rows = Math.floor((container.clientHeight - 40) / 20);
-        this.term.resize(cols, rows);
+    writeWelcomeMessage() {
+        this.typeText('>> Virtual Core Terminal v1.0\r\n');
+        this.typeText('>> Initializing systems...\r\n');
+        this.typeText('>> Type CONNECT to link your digital signature.\r\n');
     }
 
-    async start() {
-        await this.clearScreen();
-        await this.showWelcomeMessage();
-    }
-
-    async showWelcomeMessage() {
-        await this.typeText('>> Virtual Core Terminal v1.0\r\n');
-        await this.typeText('>> Initializing systems...\r\n');
-        await this.typeText('>> Type CONNECT to link your digital signature.\r\n');
+    writePrompt() {
+        this.term.write('\x1b[32m>\x1b[0m ');
     }
 
     async typeText(text, delay = 30) {
@@ -93,12 +105,6 @@ class VirtualCoreTerminal {
             this.term.write(char);
             await new Promise(resolve => setTimeout(resolve, delay));
         }
-    }
-
-    clearScreen() {
-        this.term.clear();
-        this.term.write('\x1b[H');
-        return Promise.resolve();
     }
 
     handleInput(data) {
@@ -126,7 +132,7 @@ class VirtualCoreTerminal {
         }
 
         if (this.currentState !== 'exit') {
-            this.term.write('>> ');
+            this.writePrompt();
         }
     }
 
@@ -356,6 +362,12 @@ class VirtualCoreTerminal {
         } catch (error) {
             throw new Error(`Failed to mint NFT: ${error.message}`);
         }
+    }
+
+    clearScreen() {
+        this.term.clear();
+        this.term.write('\x1b[H');
+        return Promise.resolve();
     }
 }
 

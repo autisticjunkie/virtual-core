@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Virtual Core - Terminal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/css/xterm-addon-fit.css" />
     <style>
         :root {
             --neon-green: #39ff14;
@@ -122,14 +123,38 @@
 <body>
     <div id="terminal-container"></div>
 
+    <!-- Core dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.8.0/lib/xterm-addon-web-links.js"></script>
+    
+    <!-- Blockchain dependencies -->
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <script src="https://unpkg.com/@metaplex-foundation/js@latest/dist/index.global.js"></script>
-    <script src="terminal.js"></script>
+    
+    <!-- Terminal script -->
+    <script src="./terminal.js"></script>
     <script>
-        // Initialize the terminal when the page loads
+        // Make sure all scripts are loaded before initializing
         window.addEventListener('load', () => {
-            new VirtualCoreTerminal();
+            // Check if all required dependencies are loaded
+            if (typeof Terminal !== 'undefined' && 
+                typeof solanaWeb3 !== 'undefined' && 
+                typeof Metaplex !== 'undefined') {
+                
+                // Initialize terminal
+                const terminal = new VirtualCoreTerminal();
+                
+                // Log any initialization errors
+                window.onerror = function(msg, url, line) {
+                    console.error(`Error: ${msg}\nURL: ${url}\nLine: ${line}`);
+                    return false;
+                };
+            } else {
+                console.error('Required dependencies not loaded');
+                document.getElementById('terminal-container').innerHTML = 
+                    '<div style="color: #39ff14; padding: 20px;">Error: Required dependencies not loaded. Please check console for details.</div>';
+            }
         });
     </script>
 </body>
