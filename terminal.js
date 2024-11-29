@@ -4,42 +4,27 @@ class VirtualCoreTerminal {
             // Initialize terminal
             this.term = new Terminal({
                 cursorBlink: true,
-                cursorStyle: 'block',
-                fontSize: 14,
-                fontFamily: '"Courier New", monospace',
                 theme: {
                     background: '#000000',
                     foreground: '#39ff14',
-                    cursor: '#39ff14',
-                    cursorAccent: '#000000',
-                    selection: 'rgba(57, 255, 20, 0.3)'
+                    cursor: '#39ff14'
                 },
-                allowTransparency: true,
+                fontFamily: 'Courier New, monospace',
+                fontSize: 14,
                 rendererType: 'canvas',
-                rows: Math.floor((window.innerHeight * 0.8) / 20),
-                cols: Math.floor((window.innerWidth * 0.8) / 9),
-                scrollback: 1000,
                 convertEol: true
             });
 
-            // Initialize addons
-            this.fitAddon = new FitAddon.FitAddon();
-            this.term.loadAddon(this.fitAddon);
-            this.term.loadAddon(new WebLinksAddon.WebLinksAddon());
-
-            // Open terminal in container
-            const container = document.getElementById('terminal-container');
-            if (!container) throw new Error('Terminal container not found');
+            // Initialize state
+            this.currentLine = '';
+            this.commandHistory = [];
+            this.historyIndex = -1;
+            this.prompt = '\x1b[32m>\x1b[0m ';
+            this.currentState = 'intro';
+            this.walletConnected = false;
+            this.hasNFT = false;
             
-            this.term.open(container);
-            this.fitAddon.fit();
-
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                this.fitAddon.fit();
-            });
-
-            // Configuration object
+            // Configuration
             this.config = {
                 CORE_TOKEN_ADDRESS: 'YOUR_TOKEN_ADDRESS_HERE',
                 CORE_NFT_COLLECTION: 'YOUR_COLLECTION_ADDRESS_HERE',
@@ -49,21 +34,41 @@ class VirtualCoreTerminal {
                 COMMITMENT: 'confirmed'
             };
 
-            // Initialize state
-            this.connection = null;
-            this.wallet = null;
-            this.currentState = 'intro';
-            this.walletConnected = false;
-            this.hasNFT = false;
-            this.userInput = '';
-
             // Initialize supported wallets
             this.supportedWallets = {
-                'phantom': window.solana,
-                'solflare': window.solflare,
-                'slope': window.slope,
-                'sollet': window.sollet
+                'phantom': window?.solana,
+                'solflare': window?.solflare,
+                'slope': window?.slope,
+                'sollet': window?.sollet
             };
+
+            // Open terminal in container
+            const container = document.getElementById('terminal-container');
+            if (!container) throw new Error('Terminal container not found');
+            
+            this.term.open(container);
+
+            // Initialize addons
+            if (typeof window.FitAddon === 'undefined') {
+                throw new Error('FitAddon not loaded');
+            }
+            this.fitAddon = new window.FitAddon.FitAddon();
+            this.term.loadAddon(this.fitAddon);
+            
+            if (typeof window.WebLinksAddon === 'undefined') {
+                throw new Error('WebLinksAddon not loaded');
+            }
+            this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (this.fitAddon) {
+                    this.fitAddon.fit();
+                }
+            });
+            
+            // Initial fit
+            this.fitAddon.fit();
 
             // Setup input handling
             this.setupInputHandling();
@@ -78,7 +83,7 @@ class VirtualCoreTerminal {
             console.error('Terminal initialization error:', error);
             const container = document.getElementById('terminal-container');
             if (container) {
-                container.innerHTML = `<div style="color: #39ff14; padding: 20px;">
+                container.innerHTML = `<div style="color: #39ff14; padding: 20px; font-family: monospace;">
                     Error initializing terminal: ${error.message}<br>
                     Please check console for details.
                 </div>`;
@@ -91,44 +96,84 @@ class VirtualCoreTerminal {
     }
 
     writeWelcomeMessage() {
-        this.typeText('>> Virtual Core Terminal v1.0\r\n');
-        this.typeText('>> Initializing systems...\r\n');
-        this.typeText('>> Type CONNECT to link your digital signature.\r\n');
+        this.term.writeln('\x1b[32m>> Virtual Core Terminal v1.0\x1b[0m');
+        this.term.writeln('\x1b[32m>> Initializing systems...\x1b[0m');
+        this.term.writeln('\x1b[32m>> Type HELP for available commands.\x1b[0m');
+        this.term.writeln('');
     }
 
     writePrompt() {
-        this.term.write('\x1b[32m>\x1b[0m ');
+        this.term.write(this.prompt);
     }
 
     async typeText(text, delay = 30) {
-        for (const char of text) {
-            this.term.write(char);
-            await new Promise(resolve => setTimeout(resolve, delay));
+        const lines = text.split('\n');
+        for (const line of lines) {
+            for (const char of line) {
+                this.term.write(char);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            if (lines.length > 1) this.term.write('\r\n');
         }
     }
 
     handleInput(data) {
-        // Handle special characters
-        if (data === '\r') { // Enter key
-            this.handleEnter();
-        } else if (data === '\x7f') { // Backspace
-            if (this.userInput.length > 0) {
-                this.userInput = this.userInput.slice(0, -1);
-                this.term.write('\b \b');
-            }
-        } else if (data.charCodeAt(0) > 31 && data.charCodeAt(0) < 127) { // Printable characters
-            this.userInput += data;
-            this.term.write(data);
+        switch (data) {
+            case '\r': // Enter
+                this.term.write('\r\n');
+                this.processCommand(this.currentLine.trim());
+                this.currentLine = '';
+                break;
+                
+            case '\u007F': // Backspace
+                if (this.currentLine.length > 0) {
+                    this.currentLine = this.currentLine.slice(0, -1);
+                    this.term.write('\b \b');
+                }
+                break;
+                
+            default:
+                // Only handle printable characters
+                if (data >= String.fromCharCode(32) && data <= String.fromCharCode(126)) {
+                    this.currentLine += data;
+                    this.term.write(data);
+                }
+                break;
         }
     }
 
-    async handleEnter() {
-        this.term.write('\r\n');
-        const command = this.userInput.trim().toUpperCase();
-        this.userInput = '';
-
-        if (command) {
-            await this.processCommand(command);
+    async processCommand(command) {
+        command = command.toLowerCase().trim();
+        
+        switch (command) {
+            case 'help':
+                await this.showHelp();
+                break;
+                
+            case 'clear':
+                await this.clearScreen();
+                break;
+                
+            case 'connect':
+                await this.connectWallet();
+                break;
+                
+            case 'sync':
+                await this.syncNFT();
+                break;
+                
+            case 'exit':
+                await this.exit();
+                break;
+                
+            case '':
+                // Just show prompt for empty command
+                break;
+                
+            default:
+                await this.typeText(`\x1b[31m>> Unknown command: ${command}\x1b[0m`);
+                await this.typeText('\x1b[32m>> Type HELP for available commands.\x1b[0m');
+                break;
         }
 
         if (this.currentState !== 'exit') {
@@ -136,49 +181,113 @@ class VirtualCoreTerminal {
         }
     }
 
-    async processCommand(command) {
-        switch (command) {
-            case 'CONNECT':
-                await this.connect();
-                break;
-            case 'SYNC':
-                await this.sync();
-                break;
-            case 'CLEAR':
-                await this.clearScreen();
-                break;
-            case 'EXIT':
-                await this.exit();
-                break;
-            default:
-                await this.typeText('>> Unknown command. Available commands: CONNECT, SYNC, CLEAR, EXIT\r\n');
-                break;
+    async showHelp() {
+        const commands = [
+            'Available commands:',
+            '  HELP    - Show this help message',
+            '  CONNECT - Connect your Solana wallet',
+            '  SYNC    - Mint your Virtual Core NFT',
+            '  CLEAR   - Clear the terminal screen',
+            '  EXIT    - Exit the terminal'
+        ];
+        
+        for (const line of commands) {
+            this.term.writeln(`\x1b[32m${line}\x1b[0m`);
+        }
+        this.term.writeln('');
+    }
+
+    clearScreen() {
+        this.term.clear();
+        this.term.write('\x1b[H');
+        return Promise.resolve();
+    }
+
+    async connectWallet() {
+        if (this.walletConnected) {
+            await this.typeText('\x1b[31m>> Error: Wallet already connected.\x1b[0m');
+            return;
+        }
+
+        await this.typeText('\x1b[32m>> Searching for compatible wallet...\x1b[0m');
+
+        try {
+            const detectedWallet = await this.detectWallet();
+
+            if (!detectedWallet) {
+                await this.typeText('\x1b[31m>> Error: No compatible wallet found.\x1b[0m');
+                await this.typeText('\x1b[32m>> Please install Phantom, Solflare, Slope, or Sollet.\x1b[0m');
+                return;
+            }
+
+            await this.typeText(`\x1b[32m>> Found ${detectedWallet.name} wallet.\x1b[0m`);
+            await this.typeText('\x1b[32m>> Requesting connection...\x1b[0m');
+
+            try {
+                await detectedWallet.provider.connect();
+                this.wallet = detectedWallet.provider;
+                this.walletConnected = true;
+            } catch (err) {
+                await this.typeText(`\x1b[31m>> Connection error: ${err.message}\x1b[0m`);
+                return;
+            }
+
+            await this.typeText('\x1b[32m>> Wallet connected successfully!\x1b[0m');
+            await this.typeText('\x1b[32m>> Checking balances...\x1b[0m');
+
+            const [balance, hasNFT] = await Promise.all([
+                this.checkCoreTokenBalance(),
+                this.checkNFTOwnership()
+            ]);
+
+            await this.typeText(`\x1b[32m>> Core Token Balance: ${balance}\x1b[0m`);
+            
+            if (hasNFT) {
+                this.hasNFT = true;
+                await this.typeText('\x1b[32m>> Virtual Core NFT detected!\x1b[0m');
+            } else {
+                await this.typeText('\x1b[33m>> No Virtual Core NFT found.\x1b[0m');
+                await this.typeText('\x1b[32m>> Use the SYNC command to mint your NFT.\x1b[0m');
+            }
+
+        } catch (error) {
+            console.error('Wallet connection error:', error);
+            await this.typeText(`\x1b[31m>> Error: ${error.message}\x1b[0m`);
         }
     }
 
-    async exit() {
-        this.currentState = 'exit';
-        await this.typeText('>> Terminating connection...\r\n');
-        await this.typeText('>> Session ended.\r\n');
-    }
+    async syncNFT() {
+        if (!this.walletConnected) {
+            await this.typeText('\x1b[31m>> Error: Please connect your wallet first using the CONNECT command.\x1b[0m');
+            return;
+        }
 
-    async initializeConnection() {
+        if (this.hasNFT) {
+            await this.typeText('\x1b[31m>> Error: You already own a Virtual Core NFT.\x1b[0m');
+            return;
+        }
+
+        await this.typeText('\x1b[32m>> Checking Core Token balance...\x1b[0m');
+        
+        const balance = await this.checkCoreTokenBalance();
+        
+        if (balance < this.config.REQUIRED_TOKEN_BALANCE) {
+            await this.typeText('\x1b[31m>> Error: Insufficient Core Token balance.\x1b[0m');
+            await this.typeText(`\x1b[32m>> Required: ${this.config.REQUIRED_TOKEN_BALANCE} CORE\x1b[0m`);
+            await this.typeText(`\x1b[32m>> Current: ${balance} CORE\x1b[0m`);
+            return;
+        }
+
+        await this.typeText('\x1b[32m>> Initializing NFT mint...\x1b[0m');
+        
         try {
-            this.connection = new solanaWeb3.Connection(
-                this.config.RPC_ENDPOINT,
-                this.config.COMMITMENT
-            );
-
-            await this.typeText(`>> Initializing Solana ${this.config.NETWORK} connection...\r\n`);
-            
-            const version = await this.connection.getVersion();
-            await this.typeText(`>> Connected to Solana ${this.config.NETWORK}\r\n`);
-            await this.typeText(`>> Version: ${version["solana-core"]}\r\n`);
-            
-            return true;
+            await this.mintNFT();
+            this.hasNFT = true;
+            await this.typeText('\x1b[32m>> NFT minted successfully!\x1b[0m');
+            await this.typeText('\x1b[32m>> Welcome to Virtual Core.\x1b[0m');
         } catch (error) {
-            await this.typeText(`>> Error initializing connection: ${error.message}\r\n`);
-            return false;
+            console.error('NFT minting error:', error);
+            await this.typeText(`\x1b[31m>> Minting error: ${error.message}\x1b[0m`);
         }
     }
 
@@ -219,12 +328,10 @@ class VirtualCoreTerminal {
                 return false;
             }
 
-            const metaplex = new Metaplex(this.connection)
-                .use(walletAdapterIdentity(this.wallet));
-
-            const nfts = await metaplex.nfts().findAllByOwner({
-                owner: this.wallet.publicKey,
-            });
+            const metaplex = new Metaplex(this.connection);
+            const nfts = await metaplex
+                .nfts()
+                .findAllByOwner({ owner: this.wallet.publicKey });
 
             return nfts.some(nft => 
                 nft.collection?.address.toString() === this.config.CORE_NFT_COLLECTION
@@ -235,139 +342,34 @@ class VirtualCoreTerminal {
         }
     }
 
-    async connect() {
-        if (this.walletConnected) {
-            await this.typeText('>> Error: Wallet already connected.\r\n');
-            return;
-        }
-
-        await this.clearScreen();
-        await this.typeText('>> Initiating connection...\r\n\r\n');
-        await this.typeText('>> Searching for compatible wallet...\r\n');
-
-        try {
-            await this.initializeConnection();
-            const detectedWallet = await this.detectWallet();
-
-            if (!detectedWallet) {
-                await this.typeText('>> Error: No compatible wallet found. Please install one of the following:\r\n');
-                await this.typeText('   - Phantom Wallet\r\n');
-                await this.typeText('   - Solflare\r\n');
-                await this.typeText('   - Slope\r\n');
-                await this.typeText('   - Sollet\r\n');
-                return;
-            }
-
-            await this.typeText(`>> Found ${detectedWallet.name} wallet. Requesting connection...\r\n`);
-            
-            const response = await detectedWallet.provider.connect();
-            this.wallet = detectedWallet.provider;
-            this.walletConnected = true;
-
-            await this.clearScreen();
-            await this.typeText('>> Connection successful. Your digital signature has been embedded into the Core.\r\n');
-            await this.typeText('>> Status: Active Seeker\r\n');
-            await this.typeText('>> Access Level: Initiate\r\n');
-
-            const [balance, hasNFT] = await Promise.all([
-                this.checkCoreTokenBalance(),
-                this.checkNFTOwnership()
-            ]);
-
-            await this.typeText(`>> Core Token Balance: ${balance}\r\n`);
-            
-            if (hasNFT) {
-                this.hasNFT = true;
-                await this.typeText('>> Core NFT Status: Active Node Detected\r\n');
-                await this.typeText('   (You already have an active Core Node)\r\n');
-            } else {
-                await this.typeText('>> Core NFT Status: No Active Node\r\n');
-                await this.typeText(balance < this.config.REQUIRED_TOKEN_BALANCE ? 
-                    '   (Insufficient tokens to mint. Please acquire more Core tokens)\r\n' :
-                    '   (Sufficient balance to mint your Core Node)\r\n');
-            }
-
-            await this.typeText('\r\n>> Type SYNC to generate your first Core Node.\r\n');
-        } catch (error) {
-            await this.typeText(`>> Error connecting wallet: ${error.message}\r\n`);
-        }
-    }
-
-    async sync() {
-        if (!this.walletConnected) {
-            await this.typeText('>> Error: Please connect your wallet first using the CONNECT command.\r\n');
-            return;
-        }
-
-        const hasNFT = await this.checkNFTOwnership();
-        if (hasNFT) {
-            await this.typeText('>> Error: You already have an active Core Node.\r\n');
-            await this.typeText('>> Only one Core Node is allowed per wallet.\r\n');
-            return;
-        }
-
-        const balance = await this.checkCoreTokenBalance();
-        if (balance < this.config.REQUIRED_TOKEN_BALANCE) {
-            await this.typeText('>> Error: Insufficient Core tokens. Please acquire more tokens before minting.\r\n');
-            return;
-        }
-
-        await this.clearScreen();
-        await this.typeText('>> Syncing...\r\n');
-        await this.typeText('>> Analyzing your digital signature...\r\n');
-        await this.typeText('>> Allocating resources... ██████████ 100%\r\n\r\n');
-
-        try {
-            const nft = await this.mintNFT();
-            this.hasNFT = true;
-
-            await this.typeText('>> Core Node Generated:\r\n');
-            await this.typeText('>> Attributes:\r\n');
-            await this.typeText('   - Stability: 85%\r\n');
-            await this.typeText('   - Connectivity: 90%\r\n');
-            await this.typeText('   - Growth Potential: 75%\r\n\r\n');
-            
-            await this.typeText('>> Congratulations, Seeker. Your Core Node is now live.\r\n');
-            await this.typeText('>> As you engage with the Virtual Core, it will evolve and unlock new abilities.\r\n');
-            await this.typeText('>> Type EXIT to conclude this session.\r\n');
-        } catch (error) {
-            await this.typeText(`>> Error: ${error.message}\r\n`);
-        }
-    }
-
     async mintNFT() {
+        if (!this.wallet || !this.connection) {
+            throw new Error('Wallet or connection not initialized');
+        }
+
         try {
-            if (!this.wallet || !this.connection) {
-                throw new Error('Wallet or connection not initialized');
-            }
+            const metaplex = new Metaplex(this.connection);
+            const { nft } = await metaplex
+                .nfts()
+                .create({
+                    uri: 'YOUR_METADATA_URI',
+                    name: 'Virtual Core Access',
+                    sellerFeeBasisPoints: 0,
+                    collection: new solanaWeb3.PublicKey(this.config.CORE_NFT_COLLECTION)
+                });
 
-            await this.typeText('>> Preparing NFT minting on testnet...\r\n');
-
-            const metaplex = new Metaplex(this.connection)
-                .use(walletAdapterIdentity(this.wallet));
-
-            await this.typeText('>> Creating your Core Node NFT...\r\n');
-
-            const { nft } = await metaplex.nfts().create({
-                uri: 'YOUR_METADATA_URI',
-                name: 'Core Node',
-                sellerFeeBasisPoints: 0,
-                collection: new solanaWeb3.PublicKey(this.config.CORE_NFT_COLLECTION)
-            });
-
-            await this.typeText(`>> NFT minted successfully!\r\n`);
-            await this.typeText(`>> Mint Address: ${nft.address.toString()}\r\n`);
-            
             return nft;
         } catch (error) {
             throw new Error(`Failed to mint NFT: ${error.message}`);
         }
     }
 
-    clearScreen() {
-        this.term.clear();
-        this.term.write('\x1b[H');
-        return Promise.resolve();
+    async exit() {
+        this.currentState = 'exit';
+        await this.typeText('\x1b[32m>> Terminating connection...\x1b[0m');
+        await this.typeText('\x1b[32m>> Session ended.\x1b[0m');
+        // Optional: Clear event listeners
+        window.removeEventListener('resize', this.fitAddon.fit);
     }
 }
 
