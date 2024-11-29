@@ -16,37 +16,187 @@ class VirtualCoreTerminal {
         this.connection = null;
         this.userInput = '';
         this.walletConnected = false;
+        this.walletAddress = null;
+        this.hasMinted = false;
+        
+        // Configuration
+        this.config = {
+            REQUIRED_TOKEN_AMOUNT: 100,
+            CORE_TOKEN_ADDRESS: 'YOUR_TOKEN_ADDRESS', // Replace with actual token address
+            CORE_NFT_COLLECTION: 'YOUR_NFT_COLLECTION', // Replace with actual NFT collection address
+            RPC_ENDPOINT: 'https://api.devnet.solana.com'
+        };
     }
 
     async initialize() {
         this.term.open(document.getElementById('terminal-container'));
         this.fitAddon.fit();
         this.setupEventListeners();
+        
+        // Initialize Solana connection
+        this.connection = new solanaWeb3.Connection(this.config.RPC_ENDPOINT);
+        
         await this.showIntroSequence();
     }
 
-    setupEventListeners() {
-        this.term.onKey(({ key, domEvent }) => {
-            if (this.currentState === 'intro' && domEvent.key === 'Enter') {
-                this.showSecondScreen();
+    async detectWallet() {
+        const wallets = {
+            'Phantom': window.solana,
+            'Solflare': window.solflare,
+            'Slope': window.slope,
+            'Sollet': window.sollet
+        };
+
+        for (const [name, wallet] of Object.entries(wallets)) {
+            if (wallet) {
+                return { name, provider: wallet };
+            }
+        }
+        return null;
+    }
+
+    async checkTokenBalance(walletAddress) {
+        try {
+            const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
+                new solanaWeb3.PublicKey(walletAddress),
+                {
+                    programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+                }
+            );
+
+            for (const account of tokenAccounts.value) {
+                if (account.account.data.parsed.info.mint === this.config.CORE_TOKEN_ADDRESS) {
+                    const balance = account.account.data.parsed.info.tokenAmount.uiAmount;
+                    return balance >= this.config.REQUIRED_TOKEN_AMOUNT;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking token balance:', error);
+            return false;
+        }
+    }
+
+    async checkNFTOwnership(walletAddress) {
+        try {
+            const nfts = await this.connection.getParsedTokenAccountsByOwner(
+                new solanaWeb3.PublicKey(walletAddress),
+                {
+                    programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+                }
+            );
+
+            for (const nft of nfts.value) {
+                if (nft.account.data.parsed.info.mint === this.config.CORE_NFT_COLLECTION) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (error) {
+            console.error('Error checking NFT ownership:', error);
+            return false;
+        }
+    }
+
+    async handleConnect() {
+        this.term.clear();
+        await this.typeText('>> Initiating connection...');
+        await this.typeText('');
+        await this.typeText('>> Searching for compatible wallets...');
+
+        try {
+            const detectedWallet = await this.detectWallet();
+            
+            if (!detectedWallet) {
+                await this.typeText('>> No compatible wallet found.');
+                await this.typeText('>> Please install one of the following:');
+                await this.typeText('   - Phantom Wallet');
+                await this.typeText('   - Solflare Wallet');
+                await this.typeText('   - Slope Wallet');
+                await this.typeText('   - Sollet Wallet');
                 return;
             }
 
-            if (this.currentState === 'command') {
-                if (domEvent.key === 'Enter') {
-                    this.handleCommand(this.userInput.trim());
-                    this.userInput = '';
-                } else if (domEvent.key === 'Backspace') {
-                    if (this.userInput.length > 0) {
-                        this.userInput = this.userInput.slice(0, -1);
-                        this.term.write('\b \b');
+            await this.typeText(`>> ${detectedWallet.name} wallet detected.`);
+            
+            try {
+                await detectedWallet.provider.connect();
+                this.walletConnected = true;
+                this.walletAddress = detectedWallet.provider.publicKey.toString();
+                
+                await this.typeText('>> Connection successful. Your digital signature has been embedded into the Core.');
+                await this.typeText('>> Status: Active Seeker');
+                await this.typeText('>> Access Level: Initiate');
+                
+                // Check if user has already minted
+                this.hasMinted = await this.checkNFTOwnership(this.walletAddress);
+                
+                if (this.hasMinted) {
+                    await this.typeText('>> Core Node Status: ACTIVE');
+                    await this.typeText('>> You have already generated your Core Node.');
+                    await this.typeText('>> Type EXIT to conclude this session.');
+                } else {
+                    const hasTokens = await this.checkTokenBalance(this.walletAddress);
+                    if (hasTokens) {
+                        await this.typeText('>> Core Tokens Detected: SUFFICIENT');
+                        await this.typeText('>> Type SYNC to generate your first Core Node.');
+                    } else {
+                        await this.typeText(`>> Core Tokens Required: ${this.config.REQUIRED_TOKEN_AMOUNT}`);
+                        await this.typeText('>> Insufficient Core tokens detected.');
+                        await this.typeText('>> Please acquire the required tokens before proceeding.');
                     }
-                } else if (key.length === 1) {
-                    this.userInput += key;
-                    this.term.write(key);
                 }
+            } catch (err) {
+                await this.typeText('>> Connection failed: ' + err.message);
             }
-        });
+        } catch (error) {
+            await this.typeText('>> Error establishing neural link: ' + error.message);
+        }
+    }
+
+    async handleSync() {
+        if (!this.walletConnected) {
+            await this.typeText('>> Please connect your wallet first using the CONNECT command.');
+            return;
+        }
+
+        if (this.hasMinted) {
+            await this.typeText('>> Error: Core Node already exists for this neural signature.');
+            await this.typeText('>> Only one Core Node is permitted per identity.');
+            await this.typeText('>> Type EXIT to conclude this session.');
+            return;
+        }
+
+        const hasTokens = await this.checkTokenBalance(this.walletAddress);
+        if (!hasTokens) {
+            await this.typeText('>> Error: Insufficient Core tokens detected.');
+            await this.typeText(`>> Required: ${this.config.REQUIRED_TOKEN_AMOUNT} CORE`);
+            return;
+        }
+
+        this.term.clear();
+        await this.typeText('>> Syncing...');
+        await this.typeText('>> Analyzing your digital signature...');
+        await this.typeText('>> Allocating resources... ██████████ 100%');
+        await this.typeText('');
+
+        try {
+            await this.mintNFT();
+            this.hasMinted = true;
+            
+            await this.typeText('>> Core Node Generated:');
+            await this.typeText('>> Attributes:');
+            await this.typeText('   - Stability: 85%');
+            await this.typeText('   - Connectivity: 90%');
+            await this.typeText('   - Growth Potential: 75%');
+            await this.typeText('');
+            await this.typeText('>> Congratulations, Seeker. Your Core Node is now live.');
+            await this.typeText('>> As you engage with the Virtual Core, it will evolve, grow, and unlock new abilities.');
+            await this.typeText('>> Type EXIT to conclude this session.');
+        } catch (error) {
+            await this.typeText('>> Error during Core Node generation: ' + error.message);
+            await this.typeText('>> Please try again or contact Core support.');
+        }
     }
 
     async typeText(text, delay = 50) {
@@ -129,66 +279,6 @@ class VirtualCoreTerminal {
         await this.typeText('>> Type CONNECT to proceed, or EXIT to leave the Core.');
     }
 
-    async handleConnect() {
-        this.term.clear();
-        await this.typeText('>> Initiating connection...');
-        await this.typeText('');
-        await this.typeText('>> Searching for compatible wallet...');
-
-        try {
-            if (!window.solana || !window.solana.isPhantom) {
-                await this.typeText('>> No compatible wallet found. Please install Phantom wallet.');
-                return;
-            }
-
-            try {
-                await window.solana.connect();
-                this.walletConnected = true;
-                await this.typeText('>> Connection successful. Your digital signature has been embedded into the Core.');
-                await this.typeText('>> Status: Active Seeker');
-                await this.typeText('>> Access Level: Initiate');
-                await this.typeText('>> Core NFTs Balance: 0 (Claim your first reward by syncing your node.)');
-                await this.typeText('');
-                await this.typeText('>> Type SYNC to generate your first Core Node.');
-            } catch (err) {
-                await this.typeText('>> Connection failed. Please try again.');
-            }
-        } catch (error) {
-            await this.typeText('>> Error connecting to wallet. Please try again.');
-        }
-    }
-
-    async handleSync() {
-        if (!this.walletConnected) {
-            await this.typeText('>> Please connect your wallet first using the CONNECT command.');
-            return;
-        }
-
-        this.term.clear();
-        await this.typeText('>> Syncing...');
-        await this.typeText('>> Analyzing your digital signature...');
-        await this.typeText('>> Allocating resources... ██████████ 100%');
-        await this.typeText('');
-
-        // Here you would implement the actual token check and NFT minting
-        const hasTokens = false; // Replace with actual token check
-        
-        if (!hasTokens) {
-            await this.typeText('>> Error: No Core tokens detected in wallet.');
-            await this.typeText('>> Core Node generation requires Core tokens.');
-            return;
-        }
-
-        await this.typeText('>> Core Node Generated:');
-        await this.typeText('>> Attributes:');
-        await this.typeText('   - Stability: 85%');
-        await this.typeText('   - Connectivity: 90%');
-        await this.typeText('   - Growth Potential: 75%');
-        await this.typeText('');
-        await this.typeText('>> Congratulations, Seeker. Your Core Node is now live. As you engage with the Virtual Core, it will evolve, grow, and unlock new abilities.');
-        await this.typeText('>> EXIT to conclude this session.');
-    }
-
     async handleExit() {
         this.term.clear();
         await this.typeText('>> Disconnecting from the Virtual Core...');
@@ -204,6 +294,30 @@ class VirtualCoreTerminal {
     async mintNFT() {
         // Implement actual NFT minting logic here using Metaplex
         throw new Error('NFT minting not yet implemented');
+    }
+
+    setupEventListeners() {
+        this.term.onKey(({ key, domEvent }) => {
+            if (this.currentState === 'intro' && domEvent.key === 'Enter') {
+                this.showSecondScreen();
+                return;
+            }
+
+            if (this.currentState === 'command') {
+                if (domEvent.key === 'Enter') {
+                    this.handleCommand(this.userInput.trim());
+                    this.userInput = '';
+                } else if (domEvent.key === 'Backspace') {
+                    if (this.userInput.length > 0) {
+                        this.userInput = this.userInput.slice(0, -1);
+                        this.term.write('\b \b');
+                    }
+                } else if (key.length === 1) {
+                    this.userInput += key;
+                    this.term.write(key);
+                }
+            }
+        });
     }
 }
 
