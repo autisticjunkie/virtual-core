@@ -111,11 +111,11 @@ class VirtualCoreTerminal {
                 break;
             case 'EXIT':
                 await this.handleExit();
-                break;
+                return; 
             default:
                 await this.typeText('>> Unknown command. Please try again.');
-                this.term.write('>> ');
         }
+        this.term.write('>> ');
     }
 
     async handleExplore() {
@@ -127,7 +127,6 @@ class VirtualCoreTerminal {
         await this.typeText('');
         await this.typeText('>> The Core offers infinite opportunities. Your actions will define its shape and future.');
         await this.typeText('>> Type CONNECT to proceed, or EXIT to leave the Core.');
-        this.term.write('>> ');
     }
 
     async handleConnect() {
@@ -139,7 +138,6 @@ class VirtualCoreTerminal {
         try {
             if (!window.solana || !window.solana.isPhantom) {
                 await this.typeText('>> No compatible wallet found. Please install Phantom wallet.');
-                this.term.write('>> ');
                 return;
             }
 
@@ -158,13 +156,11 @@ class VirtualCoreTerminal {
         } catch (error) {
             await this.typeText('>> Error connecting to wallet. Please try again.');
         }
-        this.term.write('>> ');
     }
 
     async handleSync() {
         if (!this.walletConnected) {
             await this.typeText('>> Please connect your wallet first using the CONNECT command.');
-            this.term.write('>> ');
             return;
         }
 
@@ -180,7 +176,6 @@ class VirtualCoreTerminal {
         if (!hasTokens) {
             await this.typeText('>> Error: No Core tokens detected in wallet.');
             await this.typeText('>> Core Node generation requires Core tokens.');
-            this.term.write('>> ');
             return;
         }
 
@@ -192,7 +187,6 @@ class VirtualCoreTerminal {
         await this.typeText('');
         await this.typeText('>> Congratulations, Seeker. Your Core Node is now live. As you engage with the Virtual Core, it will evolve, grow, and unlock new abilities.');
         await this.typeText('>> EXIT to conclude this session.');
-        this.term.write('>> ');
     }
 
     async handleExit() {
