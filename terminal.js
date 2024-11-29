@@ -209,6 +209,7 @@ class VirtualCoreTerminal {
 
     async showIntroSequence() {
         this.term.clear();
+        this.currentState = 'intro';
         await this.typeText('>> Welcome to the Virtual Core');
         await this.typeText('>> Initializing... ██████████ 100%');
         await this.typeText('');
@@ -248,8 +249,22 @@ class VirtualCoreTerminal {
     }
 
     async handleCommand(command) {
+        command = command.trim().toUpperCase();
         this.term.write('\r\n');
-        switch (command.toUpperCase()) {
+        
+        if (!command) {
+            this.term.write('>> ');
+            return;
+        }
+
+        const validCommands = ['EXPLORE', 'CONNECT', 'SYNC', 'EXIT'];
+        if (!validCommands.includes(command)) {
+            await this.typeText('>> Unknown command. Available commands: EXPLORE, CONNECT, SYNC, EXIT');
+            this.term.write('>> ');
+            return;
+        }
+
+        switch (command) {
             case 'EXPLORE':
                 await this.handleExplore();
                 break;
@@ -261,9 +276,8 @@ class VirtualCoreTerminal {
                 break;
             case 'EXIT':
                 await this.handleExit();
-                return; 
-            default:
-                await this.typeText('>> Unknown command. Please try again.');
+                this.currentState = 'exited';
+                return;
         }
         this.term.write('>> ');
     }
@@ -305,8 +319,9 @@ class VirtualCoreTerminal {
 
             if (this.currentState === 'command') {
                 if (domEvent.key === 'Enter') {
-                    this.handleCommand(this.userInput.trim());
+                    const command = this.userInput.trim();
                     this.userInput = '';
+                    this.handleCommand(command);
                 } else if (domEvent.key === 'Backspace') {
                     if (this.userInput.length > 0) {
                         this.userInput = this.userInput.slice(0, -1);
