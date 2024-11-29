@@ -26,17 +26,33 @@ class VirtualCoreTerminal {
             CORE_NFT_COLLECTION: 'YOUR_NFT_COLLECTION', // Replace with actual NFT collection address
             RPC_ENDPOINT: 'https://api.devnet.solana.com'
         };
+
+        // Debug mode
+        this.debug = true;
+    }
+
+    log(message) {
+        if (this.debug) {
+            console.log(`[VirtualCore] ${message}`);
+        }
     }
 
     async initialize() {
-        this.term.open(document.getElementById('terminal-container'));
-        this.fitAddon.fit();
-        this.setupEventListeners();
-        
-        // Initialize Solana connection
-        this.connection = new solanaWeb3.Connection(this.config.RPC_ENDPOINT);
-        
-        await this.showIntroSequence();
+        try {
+            this.log('Initializing terminal...');
+            this.term.open(document.getElementById('terminal-container'));
+            this.fitAddon.fit();
+            this.setupEventListeners();
+            
+            // Initialize Solana connection
+            this.connection = new solanaWeb3.Connection(this.config.RPC_ENDPOINT);
+            
+            await this.showIntroSequence();
+            this.log('Terminal initialized successfully');
+        } catch (error) {
+            console.error('Initialization error:', error);
+            this.term.write('>> Error initializing terminal. Please refresh the page.\r\n');
+        }
     }
 
     async detectWallet() {
@@ -199,6 +215,99 @@ class VirtualCoreTerminal {
         }
     }
 
+    async showCommandMenu() {
+        this.log('Showing command menu');
+        this.term.clear();
+        this.currentState = 'command';
+        await this.typeText('>> Type one of the following commands:');
+        await this.typeText('   - EXPLORE: Learn about the Core\'s origins.');
+        await this.typeText('   - CONNECT: Link your wallet and establish your presence.');
+        await this.typeText('   - SYNC: Generate your first Core Node.');
+        await this.typeText('   - EXIT: Terminate this session.');
+        this.term.write('\r\n>> ');
+    }
+
+    async handleCommand(command) {
+        this.log(`Handling command: "${command}"`);
+        
+        if (this.currentState !== 'command') {
+            this.log(`Invalid state for commands: ${this.currentState}`);
+            return;
+        }
+
+        command = command.trim().toUpperCase();
+        this.log(`Processed command: "${command}"`);
+        
+        if (!command) {
+            this.term.write('>> ');
+            return;
+        }
+
+        const validCommands = ['EXPLORE', 'CONNECT', 'SYNC', 'EXIT'];
+        if (!validCommands.includes(command)) {
+            this.log(`Invalid command: ${command}`);
+            await this.typeText('>> Unknown command. Available commands: EXPLORE, CONNECT, SYNC, EXIT');
+            this.term.write('>> ');
+            return;
+        }
+
+        this.log(`Executing command: ${command}`);
+        this.term.write('\r\n');
+
+        try {
+            switch (command) {
+                case 'EXPLORE':
+                    await this.handleExplore();
+                    break;
+                case 'CONNECT':
+                    await this.handleConnect();
+                    break;
+                case 'SYNC':
+                    await this.handleSync();
+                    break;
+                case 'EXIT':
+                    await this.handleExit();
+                    this.currentState = 'exited';
+                    return;
+            }
+        } catch (error) {
+            console.error(`Error executing command ${command}:`, error);
+            await this.typeText(`>> Error executing command: ${error.message}`);
+        }
+
+        if (this.currentState === 'command') {
+            this.term.write('>> ');
+        }
+    }
+
+    async handleExplore() {
+        this.term.clear();
+        await this.typeText('>> Exploring...');
+        await this.typeText('>> Retrieving historical logs...');
+        await this.typeText('');
+        await this.typeText('"In the aftermath of Solana\'s expansion, the fragmented nodes of forgotten chains coalesced. A sentient network emerged, calling itself the Virtual Core. It offered a new way to connect, create, and collaborate—free from centralized control."');
+        await this.typeText('');
+        await this.typeText('>> The Core offers infinite opportunities. Your actions will define its shape and future.');
+        await this.typeText('>> Type CONNECT to proceed, or EXIT to leave the Core.');
+    }
+
+    async handleExit() {
+        this.term.clear();
+        await this.typeText('>> Disconnecting from the Virtual Core...');
+        await this.typeText('>> Synchronization complete.');
+        await this.typeText('>> Remember, Seeker: The Core is always watching, waiting for your return.');
+        await this.typeText('');
+        await this.typeText('>> Session terminated.');
+        if (this.connection) {
+            this.connection.disconnect();
+        }
+    }
+
+    async mintNFT() {
+        // Implement actual NFT minting logic here using Metaplex
+        throw new Error('NFT minting not yet implemented');
+    }
+
     async typeText(text, delay = 50) {
         for (const char of text) {
             this.term.write(char);
@@ -237,82 +346,14 @@ class VirtualCoreTerminal {
         setTimeout(() => this.showCommandMenu(), 5000);
     }
 
-    async showCommandMenu() {
-        this.term.clear();
-        this.currentState = 'command';
-        await this.typeText('>> Type one of the following commands:');
-        await this.typeText('   - EXPLORE: Learn about the Core\'s origins.');
-        await this.typeText('   - CONNECT: Link your wallet and establish your presence.');
-        await this.typeText('   - SYNC: Generate your first Core Node.');
-        await this.typeText('   - EXIT: Terminate this session.');
-        this.term.write('\r\n>> ');
-    }
-
-    async handleCommand(command) {
-        command = command.trim().toUpperCase();
-        this.term.write('\r\n');
-        
-        if (!command) {
-            this.term.write('>> ');
-            return;
-        }
-
-        const validCommands = ['EXPLORE', 'CONNECT', 'SYNC', 'EXIT'];
-        if (!validCommands.includes(command)) {
-            await this.typeText('>> Unknown command. Available commands: EXPLORE, CONNECT, SYNC, EXIT');
-            this.term.write('>> ');
-            return;
-        }
-
-        switch (command) {
-            case 'EXPLORE':
-                await this.handleExplore();
-                break;
-            case 'CONNECT':
-                await this.handleConnect();
-                break;
-            case 'SYNC':
-                await this.handleSync();
-                break;
-            case 'EXIT':
-                await this.handleExit();
-                this.currentState = 'exited';
-                return;
-        }
-        this.term.write('>> ');
-    }
-
-    async handleExplore() {
-        this.term.clear();
-        await this.typeText('>> Exploring...');
-        await this.typeText('>> Retrieving historical logs...');
-        await this.typeText('');
-        await this.typeText('"In the aftermath of Solana\'s expansion, the fragmented nodes of forgotten chains coalesced. A sentient network emerged, calling itself the Virtual Core. It offered a new way to connect, create, and collaborate—free from centralized control."');
-        await this.typeText('');
-        await this.typeText('>> The Core offers infinite opportunities. Your actions will define its shape and future.');
-        await this.typeText('>> Type CONNECT to proceed, or EXIT to leave the Core.');
-    }
-
-    async handleExit() {
-        this.term.clear();
-        await this.typeText('>> Disconnecting from the Virtual Core...');
-        await this.typeText('>> Synchronization complete.');
-        await this.typeText('>> Remember, Seeker: The Core is always watching, waiting for your return.');
-        await this.typeText('');
-        await this.typeText('>> Session terminated.');
-        if (this.connection) {
-            this.connection.disconnect();
-        }
-    }
-
-    async mintNFT() {
-        // Implement actual NFT minting logic here using Metaplex
-        throw new Error('NFT minting not yet implemented');
-    }
-
     setupEventListeners() {
+        this.log('Setting up event listeners');
+        
         this.term.onKey(({ key, domEvent }) => {
+            this.log(`Key pressed: ${key}, keyCode: ${domEvent.keyCode}, state: ${this.currentState}`);
+            
             if (this.currentState === 'intro' && domEvent.key === 'Enter') {
+                this.log('Enter pressed in intro state');
                 this.showSecondScreen();
                 return;
             }
@@ -320,6 +361,7 @@ class VirtualCoreTerminal {
             if (this.currentState === 'command') {
                 if (domEvent.key === 'Enter') {
                     const command = this.userInput.trim();
+                    this.log(`Executing command: ${command}`);
                     this.userInput = '';
                     this.handleCommand(command);
                 } else if (domEvent.key === 'Backspace') {
@@ -327,11 +369,16 @@ class VirtualCoreTerminal {
                         this.userInput = this.userInput.slice(0, -1);
                         this.term.write('\b \b');
                     }
-                } else if (key.length === 1) {
+                } else if (key.length === 1 && !domEvent.altKey && !domEvent.ctrlKey && !domEvent.metaKey) {
                     this.userInput += key;
                     this.term.write(key);
                 }
             }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.fitAddon.fit();
         });
     }
 }
