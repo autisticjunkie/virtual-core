@@ -3,33 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <title>Virtual Core - Terminal</title>
     
     <!-- Terminal styles -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         :root {
             --neon-green: #39ff14;
+            --terminal-bg: #000000;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
 
         html, body {
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #000;
+            background-color: var(--terminal-bg);
         }
 
         #terminal-container {
             width: 100%;
             height: 100vh;
             padding: 20px;
-            background-color: #000;
+            background-color: var(--terminal-bg);
+            position: relative;
         }
 
         .xterm {
@@ -37,11 +44,32 @@
         }
 
         .xterm-viewport {
-            background-color: #000 !important;
+            background-color: var(--terminal-bg) !important;
         }
 
         .xterm-screen {
-            background-color: #000 !important;
+            background-color: var(--terminal-bg) !important;
+        }
+
+        /* Custom scrollbar for Webkit browsers */
+        ::-webkit-scrollbar {
+            width: 10px;
+            background-color: var(--terminal-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--neon-green);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background-color: var(--terminal-bg);
+        }
+
+        /* Firefox scrollbar (if supported) */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--neon-green) var(--terminal-bg);
         }
 
         @media (max-width: 768px) {
@@ -49,71 +77,79 @@
                 padding: 10px;
             }
         }
+
+        .error-message {
+            color: var(--neon-green);
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        #loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--neon-green);
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <div id="loading-indicator">Loading Virtual Core Terminal...</div>
     <div id="terminal-container"></div>
 
-    <!-- Load dependencies in correct order -->
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.7.0/lib/xterm-addon-web-links.min.js"></script>
-    
-    <!-- Load Solana dependencies -->
-    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@metaplex-foundation/js@0.19.4/dist/index.global.js"></script>
-    
-    <!-- Initialize terminal -->
+    <!-- Load dependencies with version locks and CORS headers -->
     <script>
-        // Wait for all dependencies to load
-        window.addEventListener('load', async () => {
-            try {
-                // Check if all required dependencies are loaded
-                if (!window.Terminal) {
-                    throw new Error('xterm.js not loaded');
-                }
-                if (!window.FitAddon) {
-                    throw new Error('FitAddon not loaded');
-                }
-                if (!window.WebLinksAddon) {
-                    throw new Error('WebLinksAddon not loaded');
-                }
-
-                // Load our terminal script
-                const terminalScript = document.createElement('script');
-                terminalScript.src = 'terminal.js';
-                terminalScript.onload = () => {
-                    // Initialize terminal after script loads
-                    try {
-                        window.terminal = new VirtualCoreTerminal();
-                    } catch (error) {
-                        console.error('Terminal initialization error:', error);
-                        showError(error.message);
-                    }
-                };
-                terminalScript.onerror = (error) => {
-                    console.error('Failed to load terminal.js:', error);
-                    showError('Failed to load terminal script');
-                };
-                document.body.appendChild(terminalScript);
-
-            } catch (error) {
-                console.error('Dependency error:', error);
-                showError(error.message);
-            }
-        });
-
-        function showError(message) {
-            const container = document.getElementById('terminal-container');
-            if (container) {
-                container.innerHTML = `
-                    <div style="color: #39ff14; padding: 20px; font-family: monospace;">
-                        Error: ${message}<br>
-                        Please check console for details.
-                    </div>
-                `;
-            }
+        // Helper to load script with proper error handling
+        function loadScript(url, integrity = '') {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                if (integrity) script.integrity = integrity;
+                script.crossOrigin = 'anonymous';
+                script.referrerPolicy = 'no-referrer';
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Failed to load ${url}`));
+                document.body.appendChild(script);
+            });
         }
+
+        // Show loading indicator
+        document.getElementById('loading-indicator').style.display = 'block';
+
+        // Load all dependencies in sequence
+        Promise.all([
+            loadScript('https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js'),
+            loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js'),
+            loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.7.0/lib/xterm-addon-web-links.min.js'),
+            loadScript('https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js'),
+            loadScript('https://cdn.jsdelivr.net/npm/@metaplex-foundation/js@0.19.4/dist/index.global.min.js')
+        ])
+        .then(() => loadScript('terminal.js'))
+        .then(() => {
+            // Hide loading indicator
+            document.getElementById('loading-indicator').style.display = 'none';
+            
+            // Initialize terminal
+            if (typeof VirtualCoreTerminal === 'undefined') {
+                throw new Error('Terminal script failed to load properly');
+            }
+            window.terminal = new VirtualCoreTerminal();
+        })
+        .catch(error => {
+            console.error('Initialization error:', error);
+            document.getElementById('loading-indicator').style.display = 'none';
+            document.getElementById('terminal-container').innerHTML = `
+                <div class="error-message">
+                    Error: ${error.message}
+                    Please check console for details.
+                </div>
+            `;
+        });
     </script>
 </body>
 </html>
