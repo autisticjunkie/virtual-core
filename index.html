@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Core</title>
+    <style>
+        :root {
+            --neon-green: #39ff14;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+
+        body {
+            background-color: #000;
+            color: var(--neon-green);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .video-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 2rem auto;
+            display: flex;
+            justify-content: center;
+            padding: 0 1rem;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            object-fit: contain;
+        }
+
+        .message {
+            width: 100%;
+            max-width: 800px;
+            margin: 2rem auto;
+            font-size: 1.2rem;
+            text-align: center;
+            opacity: 0;
+            text-shadow: 0 0 10px var(--neon-green);
+            padding: 0 1rem;
+            word-wrap: break-word;
+        }
+
+        .links {
+            display: flex;
+            gap: 2rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .links a {
+            color: var(--neon-green);
+            text-decoration: none;
+            font-size: 1.5rem;
+            padding: 0.5rem 1.5rem;
+            border: 2px solid var(--neon-green);
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px var(--neon-green);
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.3);
+            white-space: nowrap;
+        }
+
+        .links a:hover {
+            background-color: var(--neon-green);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-green);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .message {
+                font-size: 1rem;
+                margin: 1.5rem auto;
+            }
+
+            .links {
+                gap: 1rem;
+                flex-direction: column;
+                width: 100%;
+                align-items: center;
+            }
+
+            .links a {
+                width: 80%;
+                text-align: center;
+                font-size: 1.2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .video-container {
+                margin: 1rem auto;
+            }
+
+            .message {
+                font-size: 0.9rem;
+                margin: 1rem auto;
+            }
+
+            .links a {
+                width: 90%;
+                padding: 0.4rem 1rem;
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <video autoplay loop muted playsinline>
+            <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/animation.gif-gKcPuKylSI8hoBGQXO9MwQigb4sV7G.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <div class="message" id="typed-message">
+        The Virtual Core is a digital construct that emerged from the decentralized web—a source of infinite energy, creativity, and freedom. Users interact with the Core to harness its power for innovation, wealth, and exploration.
+    </div>
+
+    <div class="links">
+        <a href="#" class="link">TWITTER</a>
+        <a href="#" class="link">JOIN US</a>
+        <a href="terminal.html" class="link">TERMINAL</a>
+    </div>
+
+    <script>
+        // Wait for the page to load
+        window.addEventListener('load', () => {
+            const message = document.getElementById('typed-message');
+            const text = message.textContent;
+            message.textContent = '';
+            message.style.opacity = '1';
+
+            // Function to type text with delay
+            function typeText(text, element, index = 0) {
+                if (index < text.length) {
+                    element.textContent += text.charAt(index);
+                    setTimeout(() => typeText(text, element, index + 1), 50); // Adjust speed here
+                }
+            }
+
+            // Start typing animation after a short delay
+            setTimeout(() => {
+                typeText(text, message);
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
