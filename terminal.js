@@ -73,11 +73,8 @@ class VirtualCoreTerminal {
             // Setup input handling
             this.setupInputHandling();
             
-            // Write welcome message
-            this.writeWelcomeMessage();
-            
-            // Write initial prompt
-            this.writePrompt();
+            // Initialize
+            this.initialize();
 
         } catch (error) {
             console.error('Terminal initialization error:', error);
@@ -88,6 +85,84 @@ class VirtualCoreTerminal {
                     Please check console for details.
                 </div>`;
             }
+        }
+    }
+
+    async initialize() {
+        try {
+            await this.setupTerminal();
+            await this.showIntroSequence();
+        } catch (error) {
+            console.error('Initialization error:', error);
+            this.term.writeln('\x1b[31mError initializing terminal: ' + error.message + '\x1b[0m');
+        }
+    }
+
+    async showIntroSequence() {
+        // First screen
+        this.term.clear();
+        await this.typeText('\x1b[32m>> Welcome to the Virtual Core\x1b[0m');
+        await this.typeText('\x1b[32m>> Initializing... ██████████ 100%\x1b[0m\n');
+        await this.typeText('\x1b[33m"The Core has awakened. A nexus of energy, untapped potential, and infinite creativity lies before you. Will you harness its power or let it slip away?"\x1b[0m\n');
+        await this.typeText('\x1b[32m>> Press ENTER to begin your journey.\x1b[0m');
+
+        // Wait for ENTER
+        await new Promise(resolve => {
+            const handler = async (e) => {
+                if (e.key === 'Enter') {
+                    this.term.off('key', handler);
+                    resolve();
+                }
+            };
+            this.term.onKey(handler);
+        });
+
+        // Second screen
+        await this.delay(500);
+        this.term.clear();
+        await this.typeText('\x1b[32m>> Connection established.\x1b[0m');
+        await this.typeText('\x1b[32m>> Synchronizing with your neural link...\x1b[0m');
+        await this.typeText('\x1b[32m>> Scanning unique digital signature...\x1b[0m');
+        await this.typeText('\x1b[32m>> Identity confirmed:\x1b[0m');
+        await this.typeText('\x1b[32m>> Welcome, Seeker.\x1b[0m');
+
+        // Wait 5 seconds
+        await this.delay(5000);
+
+        // Third screen
+        this.term.clear();
+        await this.typeText('\x1b[33mThe Core is alive, pulsing with the energy of countless decentralized nodes. Once fragmented, it now thrives as the heart of a new digital frontier.\x1b[0m\n');
+        await this.typeText('\x1b[33mYour mission is clear: unlock its secrets, earn its rewards, and shape its future.\x1b[0m\n');
+
+        // Wait 5 seconds
+        await this.delay(5000);
+
+        // Show main menu
+        this.term.clear();
+        this.writeWelcomeMessage();
+        this.writePrompt();
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async typeText(text, speed = 30) {
+        if (!text) return;
+        
+        const lines = text.split('\n');
+        for (const line of lines) {
+            if (line === '') {
+                this.term.writeln('');
+                continue;
+            }
+            
+            for (const char of line) {
+                this.term.write(char);
+                await this.delay(speed);
+            }
+            this.term.writeln('');
+            await this.delay(50); // Slight pause between lines
         }
     }
 
@@ -108,15 +183,48 @@ class VirtualCoreTerminal {
         this.term.write(this.prompt);
     }
 
-    async typeText(text, delay = 30) {
-        const lines = text.split('\n');
-        for (const line of lines) {
-            for (const char of line) {
-                this.term.write(char);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-            if (lines.length > 1) this.term.write('\r\n');
+    async setupTerminal() {
+        // Initialize terminal
+        this.term = new Terminal({
+            cursorBlink: true,
+            theme: {
+                background: '#000000',
+                foreground: '#39ff14',
+                cursor: '#39ff14'
+            },
+            fontFamily: 'Courier New, monospace',
+            fontSize: 14,
+            rendererType: 'canvas',
+            convertEol: true
+        });
+
+        // Open terminal in container
+        const container = document.getElementById('terminal-container');
+        if (!container) throw new Error('Terminal container not found');
+        
+        this.term.open(container);
+
+        // Initialize addons
+        if (typeof window.FitAddon === 'undefined') {
+            throw new Error('FitAddon not loaded');
         }
+        this.fitAddon = new window.FitAddon.FitAddon();
+        this.term.loadAddon(this.fitAddon);
+        
+        if (typeof window.WebLinksAddon === 'undefined') {
+            throw new Error('WebLinksAddon not loaded');
+        }
+        this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (this.fitAddon) {
+                this.fitAddon.fit();
+            }
+        });
+        
+        // Initial fit
+        this.fitAddon.fit();
     }
 
     handleInput(data) {
